@@ -38,6 +38,7 @@ dependencies:
   mic_stream: ^0.6.4
   socket_io_client: ^2.0.1
   audioplayers: ^3.0.1
+  raw_sound: ^0.3.0+1
 
 dev_dependencies:
   flutter_test:

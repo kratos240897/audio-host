@@ -3,6 +3,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mic_stream/mic_stream.dart';
+import 'package:raw_sound/raw_sound_player.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:socket_io_client/socket_io_client.dart';
 
@@ -19,12 +20,17 @@ class _HomeState extends State<Home> {
   Stream<Uint8List>? stream;
   StreamSubscription<Uint8List>? listener;
   late io.Socket socket;
-  AudioPlayer? audioPlayer = AudioPlayer();
+  //AudioPlayer? audioPlayer = AudioPlayer();
+  RawSoundPlayer? playerPCMI16 = RawSoundPlayer();
+
+  static int bufferSize = 4096 << 4;
+  static int nChannels = 1;
+  static int sampleRate = 16000;
 
   Future<void> initSocket() async {
     try {
       socket = io.io(
-          'https://0903-27-5-115-227.in.ngrok.io',
+          'https://2a46-27-5-115-227.in.ngrok.io',
           OptionBuilder()
               .setTransports(['websocket'])
               .enableAutoConnect()
@@ -44,6 +50,18 @@ class _HomeState extends State<Home> {
 
   @override
   void initState() {
+    playerPCMI16
+        ?.initialize(
+      bufferSize: bufferSize,
+      nChannels: nChannels,
+      sampleRate: sampleRate,
+      pcmType: RawSoundPCMType.PCMI16,
+    )
+        .then((value) {
+      setState(() {
+        // Trigger rebuild to update UI
+      });
+    });
     initSocket().then((value) {
       if (kDebugMode) {
         print(socket.connected);
@@ -64,13 +82,15 @@ class _HomeState extends State<Home> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton.icon(
-                onPressed: isReceiving ? null : () async {
-                  if (isSending) {
-                    _pauseCapturing();
-                    return;
-                  }
-                  await _startCaputring();
-                },
+                onPressed: isReceiving
+                    ? null
+                    : () async {
+                        if (isSending) {
+                          _pauseCapturing();
+                          return;
+                        }
+                        await _startCaputring();
+                      },
                 style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16.0, vertical: 8.0),
@@ -79,13 +99,15 @@ class _HomeState extends State<Home> {
                     isSending ? Icons.signal_cellular_alt_rounded : Icons.send),
                 label: Text(isSending ? 'Sending' : 'Send')),
             ElevatedButton.icon(
-                onPressed: isSending ? null : () async {
-                  if (isReceiving) {
-                    _pauseReceiving();
-                    return;
-                  }
-                  await _receiveAudio();
-                },
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        if (isReceiving) {
+                          _pauseReceiving();
+                          return;
+                        }
+                        await _receiveAudio();
+                      },
                 style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16.0, vertical: 8.0),
@@ -116,7 +138,7 @@ class _HomeState extends State<Home> {
   }
 
   _receiveAudio() async {
-    if (stream != null && listener != null && audioPlayer != null) {
+    if (stream != null && listener != null && playerPCMI16 != null) {
       await _resumeReceiving();
       return;
     }
@@ -124,11 +146,13 @@ class _HomeState extends State<Home> {
       isSending = false;
       isReceiving = true;
     });
+    await playerPCMI16?.play();
     socket.on('audio-stream-receive', (data) async {
       if (kDebugMode) {
         print('audio-stream-receive $data');
       }
-      await audioPlayer?.play(BytesSource(data));
+      //await audioPlayer?.play(BytesSource(data));
+      await playerPCMI16?.feed(data);
     });
   }
 
@@ -136,18 +160,18 @@ class _HomeState extends State<Home> {
     setState(() {
       isReceiving = false;
     });
-    await audioPlayer?.pause();
+    await playerPCMI16?.pause();
   }
 
   _resumeReceiving() async {
     setState(() {
       isReceiving = true;
     });
-    await audioPlayer?.resume();
+    await playerPCMI16?.resume();
   }
 
   _stopReceiving() async {
-    await audioPlayer?.stop();
+    await playerPCMI16?.stop();
   }
 
   _pauseCapturing() async {
